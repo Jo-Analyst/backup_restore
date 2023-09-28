@@ -3,10 +3,14 @@ import 'dart:io';
 import 'package:backup_restore/db.dart';
 import 'package:backup_restore/pages/person_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:mailer/mailer.dart';
+import 'package:mailer/smtp_server/hotmail.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sqflite/sqflite.dart';
 
-void main() {
+void main() async {
+  await dotenv.load(fileName: ".env");
   runApp(const MyApp());
 }
 
@@ -69,6 +73,25 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() {});
   }
 
+  Future<void> sendEmailWithAttachment(String backupFilePath) async {
+    final smtpServer = hotmail(dotenv.get("EMAIL"), dotenv.get("PASSWORD"));
+    final message = Message()
+      ..from = Address(dotenv.get("EMAIL"), 'las')
+      ..recipients.add('joalves3carvalho@gmail.com')
+      ..subject = 'Backup do Banco de Dados'
+      ..text = 'Anexo de backup do banco de dados'
+      ..attachments.add(FileAttachment(File(backupFilePath)))
+      ..html =
+          '<div><h1>Anexo de backup do banco de dados</h1>Backup realizado pelo aplicativo App Kayke Barbearia no dia ${DateTime.now()}</div>';
+
+    try {
+      final sendReport = await send(message, smtpServer);
+      print('E-mail enviado: ${sendReport.toString()}');
+    } catch (e) {
+      print('Erro ao enviar e-mail: $e');
+    }
+  }
+
   void backupDB() async {
     var status = await Permission.manageExternalStorage.status;
     if (!status.isGranted) {
@@ -88,6 +111,7 @@ class _MyHomePageState extends State<MyHomePage> {
       Directory? folderPathForDbFile = Directory('/storage/emulated/0/teste/');
       await folderPathForDbFile.create();
       await ourDbFile.copy("/storage/emulated/0/teste/teste.db");
+      await sendEmailWithAttachment("/storage/emulated/0/teste/teste.db");
     } catch (e) {
       print(e.toString());
     }
